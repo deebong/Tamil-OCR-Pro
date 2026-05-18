@@ -1,593 +1,984 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Tamil OCR Pro | Client-Side Vision</title>
-<meta name="description" content="Professional, fast, client-side OCR for Tamil and English."/>
-
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
-<script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();"></script>
-
-<style>
-/* ==========================================================================
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tamil OCR Pro | Client-Side Vision</title>
+    <meta name="description" content="Professional, fast, client-side OCR for Tamil and English." />
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();"></script>
+    <style>
+      /* ==========================================================================
    MODERN SAAS VARIABLES & RESET
    ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-:root {
-  --brand: #4f46e5;
-  --brand-hover: #4338ca;
-  --brand-light: #e0e7ff;
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --border: #e2e8f0;
-  --radius-lg: 16px;
-  --radius-md: 8px;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-}
+      :root {
+        --brand: #4f46e5;
+        --brand-hover: #4338ca;
+        --brand-light: #e0e7ff;
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border: #e2e8f0;
+        --radius-lg: 16px;
+        --radius-md: 8px;
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background-color: var(--bg);
-  color: var(--text-main);
-  line-height: 1.5;
-  min-height: 100vh;
-  padding: 20px;
-  /* Removed the strict overflow: hidden to allow natural scrolling on all devices */
-  display: flex;
-  justify-content: center;
-}
+      body {
+        font-family: 'Inter', system-ui, sans-serif;
+        background-color: var(--bg);
+        color: var(--text-main);
+        line-height: 1.5;
+        min-height: 100vh;
+        padding: 20px;
+        /* Removed the strict overflow: hidden to allow natural scrolling on all devices */
+        display: flex;
+        justify-content: center;
+      }
 
-.container { 
-  width: 100%; 
-  max-width: 1200px; 
-  display: flex;
-  flex-direction: column;
-}
+      .container {
+        width: 100%;
+        max-width: 1200px;
+        display: flex;
+        flex-direction: column;
+      }
 
-/* ==========================================================================
+      /* ==========================================================================
    HEADER
    ========================================================================== */
-header { text-align: center; margin-bottom: 30px; }
-h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; color: var(--text-main); margin-bottom: 4px;}
-p { color: var(--text-muted); font-size: 1rem; }
+      header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
 
-/* ==========================================================================
+      h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--text-main);
+        margin-bottom: 4px;
+      }
+
+      p {
+        color: var(--text-muted);
+        font-size: 1rem;
+      }
+
+      /* ==========================================================================
+   INFO MODAL & ICONS
+   ========================================================================== */
+      .info-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        border-radius: 50%;
+        transition: all 0.2s ease;
+        margin-bottom: 4px;
+      }
+
+      .info-btn:hover {
+        color: var(--brand);
+        background: var(--brand-light);
+      }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 2000;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .modal-overlay.show {
+        display: flex;
+        opacity: 1;
+      }
+
+      .modal-content {
+        background: var(--surface);
+        padding: 32px;
+        border-radius: var(--radius-lg);
+        max-width: 600px;
+        width: 90%;
+        max-height: 85vh;
+        overflow-y: auto;
+        box-shadow: var(--shadow-lg);
+        position: relative;
+      }
+
+      .modal-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-muted);
+        padding: 8px;
+        border-radius: 50%;
+        transition: 0.2s;
+      }
+
+      .modal-close:hover {
+        background: var(--bg);
+        color: var(--text-main);
+      }
+
+      .modal-content h2 {
+        margin-bottom: 8px;
+        color: var(--text-main);
+        font-size: 1.5rem;
+      }
+
+      .modal-content h3 {
+        margin-top: 24px;
+        margin-bottom: 12px;
+        font-size: 1.1rem;
+        color: var(--brand);
+      }
+
+      .modal-content ul {
+        padding-left: 24px;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        line-height: 1.6;
+      }
+
+      .modal-content li {
+        margin-bottom: 8px;
+      }
+
+      /* Custom Scrollbar for Modal to preserve rounded corners */
+      .modal-content::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .modal-content::-webkit-scrollbar-track {
+        background: transparent;
+        /* This margin pushes the scrollbar track away from the rounded corners */
+        margin: 16px 0;
+      }
+
+      .modal-content::-webkit-scrollbar-thumb {
+        background-color: var(--border);
+        border-radius: 10px;
+      }
+
+      .modal-content::-webkit-scrollbar-thumb:hover {
+        background-color: var(--text-muted);
+      }
+
+      /* ==========================================================================
    LAYOUT GRID (Mobile First)
    ========================================================================== */
-.grid { 
-  display: flex; 
-  flex-direction: column;
-  gap: 24px; 
-}
-
-/* Desktop Grid */
-@media(min-width: 860px) {
-  .grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    align-items: stretch;
-  }
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-direction: column;
-}
-
-.section-title { font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: var(--text-main); display: flex; justify-content: space-between; align-items: center;}
-
-/* ==========================================================================
-   CONTROLS & TOGGLES
-   ========================================================================== */
-.segmented-control {
-  display: flex; background: var(--bg); border-radius: var(--radius-md); padding: 4px; border: 1px solid var(--border); margin-bottom: 12px;
-}
-.segmented-control button {
-  flex: 1; background: transparent; border: none; padding: 8px; border-radius: 6px;
-  font-weight: 500; font-family: inherit; color: var(--text-muted); cursor: pointer; transition: all 0.2s ease; font-size: 0.9rem;
-}
-.segmented-control button.active { background: var(--surface); color: var(--brand); box-shadow: var(--shadow-sm); }
-.segmented-control button:hover:not(.active) { color: var(--text-main); }
-
-.toggle-wrapper {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
-  background: var(--bg); padding: 10px 14px; border-radius: var(--radius-md); border: 1px solid var(--border);
-}
-.toggle-text { display: flex; flex-direction: column; }
-.toggle-text strong { font-weight: 600; font-size: 0.9rem; color: var(--text-main); }
-.toggle-text span { font-size: 0.75rem; color: var(--text-muted); }
-
-.switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0;}
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .4s; border-radius: 24px; }
-.slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-input:checked + .slider { background-color: var(--brand); }
-input:checked + .slider:before { transform: translateX(18px); }
-
-/* ==========================================================================
-   DROPZONE & LIVE PREVIEW
-   ========================================================================== */
-.dropzone {
-  border: 2px dashed var(--border); border-radius: var(--radius-md); background: var(--bg);
-  padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s ease;
-  display: flex; flex-direction: column; justify-content: center; align-items: center;
-  position: relative; overflow: hidden; flex-grow: 1; min-height: 200px;
-}
-.dropzone:hover { border-color: var(--brand); background: var(--brand-light); }
-.dropzone.drag { border-color: var(--brand); background: var(--brand-light); transform: scale(1.02); }
-.dropzone svg { width: 32px; height: 32px; color: var(--brand); margin-bottom: 8px; opacity: 0.8;}
-.dropzone p { color: var(--text-main); font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;}
-.dropzone span { font-size: 0.75rem; color: var(--text-muted); }
-
-.preview-container { position: absolute; inset: 0; background: var(--surface); display: none; padding: 10px;}
-.preview-container img { width: 100%; height: 100%; object-fit: contain; border-radius: 4px; }
-.clear-btn { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; z-index: 10;}
-.clear-btn:hover { background: rgba(0,0,0,0.9); transform: scale(1.1);}
-
-/* ==========================================================================
-   PROGRESS & BUTTONS
-   ========================================================================== */
-.status-area { margin: 16px 0; }
-.status-header { display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 500; color: var(--text-muted); margin-bottom: 6px;}
-.progress-track { height: 6px; background: var(--border); border-radius: 4px; overflow: hidden; }
-.progress-fill { height: 100%; background: var(--brand); width: 0%; transition: width 0.3s ease-out; }
-
-.btn-primary {
-  background: var(--brand); color: white; border: none; padding: 12px; border-radius: var(--radius-md);
-  font-weight: 600; font-size: 1rem; cursor: pointer; transition: all 0.2s ease; width: 100%; font-family: inherit;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-}
-.btn-primary:hover:not(:disabled) { background: var(--brand-hover); transform: translateY(-1px); box-shadow: var(--shadow-md); }
-.btn-primary:active:not(:disabled) { transform: translateY(0); }
-.btn-primary:disabled { background: var(--text-muted); opacity: 0.5; cursor: not-allowed; }
-
-/* ==========================================================================
-   OUTPUT & EXPORT
-   ========================================================================== */
-.stats { font-size: 0.75rem; color: var(--text-muted); font-weight: 400; background: var(--bg); padding: 4px 10px; border-radius: 12px;}
-.output-area {
-  width: 100%; flex-grow: 1; padding: 16px; border: 1px solid var(--border);
-  border-radius: var(--radius-md); resize: vertical; font-family: inherit; font-size: 0.95rem;
-  color: var(--text-main); background: var(--bg); transition: all 0.2s ease; outline: none; line-height: 1.6;
-  min-height: 250px;
-}
-.output-area:focus { border-color: var(--brand); background: var(--surface); box-shadow: 0 0 0 3px var(--brand-light);}
-
-.action-row { display: flex; gap: 12px; margin-top: 16px; }
-.btn-secondary {
-  flex: 1; background: var(--surface); color: var(--text-main); border: 1px solid var(--border);
-  padding: 10px; border-radius: var(--radius-md); font-weight: 500; font-size: 0.9rem;
-  cursor: pointer; transition: all 0.2s ease; font-family: inherit;
-}
-.btn-secondary:hover { background: var(--bg); border-color: #cbd5e1; }
-
-/* ==========================================================================
-   TOAST NOTIFICATION
-   ========================================================================== */
-.toast {
-  position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
-  background: #1e293b; color: white; padding: 12px 24px; border-radius: 30px;
-  font-size: 0.9rem; font-weight: 500; box-shadow: var(--shadow-lg);
-  opacity: 0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1000;
-}
-.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-
-</style>
-</head>
-
-<body>
-<div class="container">
-  <header>
-    <h1>Tamil OCR Pro</h1>
-    <p>Secure, client-side text extraction powered by AI.</p>
-  </header>
-
-  <div class="grid">
-    <div class="card">
-      <div class="section-title">Extraction Settings</div>
-      
-      <div class="segmented-control" id="langToggle">
-        <button class="active" data-lang="tam">Tamil</button>
-        <button data-lang="eng">English</button>
-        <button data-lang="tam+eng">Tamil + English</button>
-      </div>
-
-      <div class="toggle-wrapper">
-        <div class="toggle-text">
-          <strong>Enhance Scan (Live Preview)</strong>
-          <span>Toggle to auto-clean shadows and paper textures</span>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="cvToggle">
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="dropzone" id="dropzone">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-        <p>Drop image here or click to browse</p>
-        <span>Supports JPG, PNG, WEBP, GIF (or Paste)</span>
-        <input type="file" id="fileInput" accept="image/*" style="display:none">
-        
-        <canvas id="hiddenCanvas" style="display:none;"></canvas>
-
-        <div class="preview-container" id="previewContainer">
-          <img id="previewImage" alt="Preview"/>
-          <button class="clear-btn" id="clearBtn" title="Remove image">✕</button>
-        </div>
-      </div>
-
-      <div class="status-area">
-        <div class="status-header">
-          <span id="statusMessage">Awaiting image...</span>
-          <span id="statusPercent"></span>
-        </div>
-        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-      </div>
-
-      <button class="btn-primary" id="runBtn" disabled>
-        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-        Extract Text
-      </button>
-    </div>
-
-    <div class="card">
-      <div class="section-title">
-        Extracted Output
-        <span class="stats" id="textStats">0 Words | 0 Chars</span>
-      </div>
-      
-      <textarea class="output-area" id="outputBox" placeholder="Text will be extracted here... Feel free to edit it directly." spellcheck="false"></textarea>
-      
-      <div class="action-row">
-        <button class="btn-secondary" id="copyBtn">Copy to Clipboard</button>
-        <button class="btn-secondary" id="downloadBtn">Export as .TXT</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast">Text copied to clipboard!</div>
-
-<script>
-/**
- * 1. STATE & GLOBAL VARIABLES
- */
-let file = null;
-let originalImageSrc = null; // Stores the raw uploaded image
-let lang = "tam";
-let worker = null;
-let currentWorkerLang = null;
-
-// OpenCV State
-let useOpenCV = false;
-let cvReady = false;
-
-function onOpenCvReady() {
-  cv['onRuntimeInitialized'] = () => {
-    cvReady = true;
-    console.log("OpenCV engine loaded and ready.");
-  };
-}
-
-const els = {
-  langBtns: document.querySelectorAll('.segmented-control button'),
-  cvToggle: document.getElementById('cvToggle'),
-  dropzone: document.getElementById('dropzone'),
-  fileInput: document.getElementById('fileInput'),
-  previewContainer: document.getElementById('previewContainer'),
-  previewImage: document.getElementById('previewImage'),
-  hiddenCanvas: document.getElementById('hiddenCanvas'),
-  clearBtn: document.getElementById('clearBtn'),
-  runBtn: document.getElementById('runBtn'),
-  statusMessage: document.getElementById('statusMessage'),
-  statusPercent: document.getElementById('statusPercent'),
-  progressFill: document.getElementById('progressFill'),
-  outputBox: document.getElementById('outputBox'),
-  textStats: document.getElementById('textStats'),
-  copyBtn: document.getElementById('copyBtn'),
-  downloadBtn: document.getElementById('downloadBtn'),
-  toast: document.getElementById('toast')
-};
-
-/**
- * 2. EVENT LISTENERS
- */
-els.langBtns.forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    els.langBtns.forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    lang = e.target.dataset.lang;
-  });
-});
-
-// Live Visual Update when Toggling Enhance Mode
-els.cvToggle.addEventListener('change', (e) => {
-  if (e.target.checked && !cvReady) {
-    showToast("Visual engine is still loading, please wait a moment.");
-    e.target.checked = false;
-    return;
-  }
-  useOpenCV = e.target.checked;
-  
-  if (originalImageSrc) applyLivePreview();
-});
-
-els.dropzone.addEventListener('click', () => !file && els.fileInput.click());
-els.fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
-
-els.dropzone.addEventListener('dragover', e => { e.preventDefault(); els.dropzone.classList.add('drag'); });
-els.dropzone.addEventListener('dragleave', () => els.dropzone.classList.remove('drag'));
-els.dropzone.addEventListener('drop', e => {
-  e.preventDefault();
-  els.dropzone.classList.remove('drag');
-  handleFile(e.dataTransfer.files[0]);
-});
-
-document.addEventListener('paste', e => {
-  const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-  for (let item of items) {
-    if (item.type.indexOf('image') === 0) {
-      handleFile(item.getAsFile());
-    }
-  }
-});
-
-els.clearBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  file = null;
-  originalImageSrc = null;
-  els.fileInput.value = '';
-  els.previewContainer.style.display = 'none';
-  els.previewImage.src = '';
-  els.runBtn.disabled = true;
-  updateStatus('Awaiting image...', 0);
-});
-
-els.runBtn.addEventListener('click', runOCR);
-els.outputBox.addEventListener('input', updateStats);
-els.copyBtn.addEventListener('click', copyText);
-els.downloadBtn.addEventListener('click', downloadTxt);
-
-/**
- * 3. FILE HANDLING & LIVE PREVIEW PIPELINE
- */
-function handleFile(f) {
-  if(!f || !f.type.startsWith('image/')) {
-    showToast("Please upload a valid image file.");
-    return;
-  }
-  file = f;
-  els.runBtn.disabled = true; 
-  updateStatus('Loading image...', 0);
-
-  const reader = new FileReader();
-  reader.onload = e => {
-    originalImageSrc = e.target.result;
-    applyLivePreview();
-  };
-  reader.readAsDataURL(f);
-}
-
-// Function to process the image and update the visual preview container
-function applyLivePreview() {
-  const img = new Image();
-  img.onload = () => {
-    const processedCanvas = preprocess(img);
-    els.previewImage.src = processedCanvas.toDataURL();
-    
-    els.previewContainer.style.display = 'block';
-    els.runBtn.disabled = false;
-    updateStatus('Ready to extract.', 0);
-  };
-  img.src = originalImageSrc;
-}
-
-function updateStatus(msg, percent) {
-  els.statusMessage.innerText = msg;
-  if(percent !== null && percent !== undefined) {
-    els.progressFill.style.width = `${percent}%`;
-    els.statusPercent.innerText = percent > 0 ? `${Math.round(percent)}%` : '';
-  }
-}
-
-function updateStats() {
-  const text = els.outputBox.value;
-  const chars = text.length;
-  const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
-  els.textStats.innerText = `${words} Words | ${chars} Chars`;
-}
-
-function showToast(msg = "Text copied to clipboard!") {
-  els.toast.innerText = msg;
-  els.toast.classList.add('show');
-  setTimeout(() => els.toast.classList.remove('show'), 3000);
-}
-
-/**
- * 4. HYBRID PREPROCESSING (Live Preview Ready)
- */
-function preprocess(img){
-  const canvas = els.hiddenCanvas;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-
-  // PRO MODE: Robust Text Denoising + Adaptive Thresholding
-  if (useOpenCV && cvReady && typeof cv !== 'undefined') {
-    try {
-      let src = cv.imread(img);
-      let dst = new cv.Mat();
-      
-      cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
-      cv.medianBlur(src, src, 3);
-      cv.adaptiveThreshold(src, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 15);
-      
-      cv.imshow(canvas, dst);
-      src.delete(); dst.delete();
-      return canvas;
-    } catch (err) {
-      console.warn("OpenCV enhancement failed, falling back to basic processing.");
-    }
-  }
-  
-  // FAST MODE: Standard JavaScript fallback (High accuracy for clean images)
-  ctx.drawImage(img,0,0);
-  const data = ctx.getImageData(0,0,canvas.width,canvas.height);
-  const d = data.data;
-
-  for(let i=0; i<d.length; i+=4){
-    const avg = (d[i]+d[i+1]+d[i+2])/3;
-    const val = avg > 140 ? 255 : 0;
-    d[i] = d[i+1] = d[i+2] = val;
-  }
-  
-  ctx.putImageData(data,0,0);
-  return canvas;
-}
-
-/**
- * 5. TESSERACT ENGINE MANAGEMENT
- */
-async function getWorker(targetLang) {
-  if (worker && currentWorkerLang === targetLang) return worker;
-  
-  if (worker) {
-    await worker.terminate();
-    worker = null;
-  }
-
-  updateStatus('Initializing AI Engine...', 5);
-  
-  worker = await Tesseract.createWorker(targetLang, 1, {
-    logger: m => {
-      if(m.status === 'recognizing text' && m.progress) {
-        updateStatus('Extracting text...', m.progress * 100);
+      .grid {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
       }
-    }
-  });
 
-  // We use PSM 6 to force Tesseract to read strictly top-to-bottom, line-by-line.
-  // We will handle the paragraph spacing ourselves using pixel math below.
-  await worker.setParameters({ 
-    tessedit_pageseg_mode: 6, 
-    preserve_interword_spaces: '1' 
-  });
-  
-  currentWorkerLang = targetLang;
-  return worker;
-}
-
-/**
- * 6. CORE EXECUTION & PHYSICAL PIXEL SPACING
- */
-async function runOCR() {
-  if(!file) return;
-
-  els.runBtn.disabled = true;
-  els.outputBox.value = "";
-  
-  try {
-    if(els.previewImage.naturalWidth === 0) throw new Error("Image not fully loaded.");
-
-    updateStatus('Analyzing structure...', 2);
-    
-    const activeWorker = await getWorker(lang);
-    
-    // Extract the raw data object containing the physical pixel coordinates of every line
-    const { data } = await activeWorker.recognize(els.hiddenCanvas);
-    
-    let reconstructedText = "";
-
-    // CUSTOM PHYSICAL SPACING ENGINE
-    if (data.lines && data.lines.length > 0) {
-      // Start with the first line
-      reconstructedText = data.lines[0].text.trim();
-      
-      for (let i = 1; i < data.lines.length; i++) {
-        const prevBox = data.lines[i-1].bbox; // Previous line's pixel coordinates
-        const currBox = data.lines[i].bbox;   // Current line's pixel coordinates
-
-        // Calculate the height of the previous line
-        const prevLineHeight = prevBox.y1 - prevBox.y0;
-        
-        // Calculate the vertical distance from the top of the prev line to the top of the current line
-        const verticalDistance = currBox.y0 - prevBox.y0;
-
-        // Standard spacing is ~1.1x to 1.3x the line height. 
-        // If the distance is greater than 1.6x, it means there is a physical gap (a paragraph break!)
-        if (verticalDistance > prevLineHeight * 1.6) {
-          reconstructedText += "\n\n" + data.lines[i].text.trim(); // Add double space
-        } else {
-          reconstructedText += "\n" + data.lines[i].text.trim();   // Add single space
+      /* Desktop Grid */
+      @media(min-width: 860px) {
+        .grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          align-items: stretch;
         }
       }
-    } else {
-      reconstructedText = data.text; // Fallback just in case
-    }
-	
-    // PRO CLEANUP: Strip ZWNJ, ZWJ, and other invisible ghosts that break Notepad++
-    let cleanedText = reconstructedText.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
-    els.outputBox.value = cleanedText || "No text detected in this image.";    
-    
-    updateStatus('Extraction complete!', 100);
-    
-  } catch(e) {
-    console.error("OCR Error:", e);
-    els.outputBox.value = "Error processing image. Please try a different image.";
-    updateStatus('Extraction failed.', 0);
-  } finally {
-    els.runBtn.disabled = false;
-    updateStats();
-    
-    setTimeout(() => {
-      if(!els.runBtn.disabled) updateStatus('Ready for next extraction.', 0);
-    }, 2500);
-  }
-}
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        display: flex;
+        flex-direction: column;
+      }
 
-/**
- * 7. EXPORT HELPERS
- */
-function copyText(){
-  const text = els.outputBox.value;
-  if (!text) {
-    showToast("Nothing to copy!");
-    return;
-  }
-  navigator.clipboard.writeText(text);
-  showToast();
-}
+      .section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 16px;
+        color: var(--text-main);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
 
-function downloadTxt() {
-  const text = els.outputBox.value;
-  if (!text) {
-    showToast("Nothing to export!");
-    return;
-  }
-  const blob = new Blob([text], { type: 'text/plain' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `OCR_Export_${new Date().getTime()}.txt`;
-  a.click();
-}
-</script>
+      /* ==========================================================================
+   CONTROLS & TOGGLES
+   ========================================================================== */
+      .segmented-control {
+        display: flex;
+        background: var(--bg);
+        border-radius: var(--radius-md);
+        padding: 4px;
+        border: 1px solid var(--border);
+        margin-bottom: 12px;
+      }
 
-</body>
+      .segmented-control button {
+        flex: 1;
+        background: transparent;
+        border: none;
+        padding: 8px;
+        border-radius: 6px;
+        font-weight: 500;
+        font-family: inherit;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+      }
+
+      .segmented-control button.active {
+        background: var(--surface);
+        color: var(--brand);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .segmented-control button:hover:not(.active) {
+        color: var(--text-main);
+      }
+
+      .toggle-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        background: var(--bg);
+        padding: 10px 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+      }
+
+      .toggle-text {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .toggle-text strong {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--text-main);
+      }
+
+      .toggle-text span {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 22px;
+        flex-shrink: 0;
+      }
+
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #cbd5e1;
+        transition: .4s;
+        border-radius: 24px;
+      }
+
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+      }
+
+      input:checked+.slider {
+        background-color: var(--brand);
+      }
+
+      input:checked+.slider:before {
+        transform: translateX(18px);
+      }
+
+      /* ==========================================================================
+   DROPZONE & LIVE PREVIEW
+   ========================================================================== */
+      .dropzone {
+        border: 2px dashed var(--border);
+        border-radius: var(--radius-md);
+        background: var(--bg);
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+        flex-grow: 1;
+        min-height: 200px;
+      }
+
+      .dropzone:hover {
+        border-color: var(--brand);
+        background: var(--brand-light);
+      }
+
+      .dropzone.drag {
+        border-color: var(--brand);
+        background: var(--brand-light);
+        transform: scale(1.02);
+      }
+
+      .dropzone svg {
+        width: 32px;
+        height: 32px;
+        color: var(--brand);
+        margin-bottom: 8px;
+        opacity: 0.8;
+      }
+
+      .dropzone p {
+        color: var(--text-main);
+        font-weight: 500;
+        margin-bottom: 4px;
+        font-size: 0.9rem;
+      }
+
+      .dropzone span {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .preview-container {
+        position: absolute;
+        inset: 0;
+        background: var(--surface);
+        display: none;
+        padding: 10px;
+      }
+
+      .preview-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 4px;
+      }
+
+      .clear-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.2s;
+        z-index: 10;
+      }
+
+      .clear-btn:hover {
+        background: rgba(0, 0, 0, 0.9);
+        transform: scale(1.1);
+      }
+
+      /* ==========================================================================
+   PROGRESS & BUTTONS
+   ========================================================================== */
+      .status-area {
+        margin: 16px 0;
+      }
+
+      .status-header {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+
+      .progress-track {
+        height: 6px;
+        background: var(--border);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: var(--brand);
+        width: 0%;
+        transition: width 0.3s ease-out;
+      }
+
+      .btn-primary {
+        background: var(--brand);
+        color: white;
+        border: none;
+        padding: 12px;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        width: 100%;
+        font-family: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background: var(--brand-hover);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-md);
+      }
+
+      .btn-primary:active:not(:disabled) {
+        transform: translateY(0);
+      }
+
+      .btn-primary:disabled {
+        background: var(--text-muted);
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* ==========================================================================
+   OUTPUT & EXPORT
+   ========================================================================== */
+      .stats {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-weight: 400;
+        background: var(--bg);
+        padding: 4px 10px;
+        border-radius: 12px;
+      }
+
+      .output-area {
+        width: 100%;
+        flex-grow: 1;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        resize: vertical;
+        font-family: inherit;
+        font-size: 0.95rem;
+        color: var(--text-main);
+        background: var(--bg);
+        transition: all 0.2s ease;
+        outline: none;
+        line-height: 1.6;
+        min-height: 250px;
+      }
+
+      .output-area:focus {
+        border-color: var(--brand);
+        background: var(--surface);
+        box-shadow: 0 0 0 3px var(--brand-light);
+      }
+
+      .action-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .btn-secondary {
+        flex: 1;
+        background: var(--surface);
+        color: var(--text-main);
+        border: 1px solid var(--border);
+        padding: 10px;
+        border-radius: var(--radius-md);
+        font-weight: 500;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-family: inherit;
+      }
+
+      .btn-secondary:hover {
+        background: var(--bg);
+        border-color: #cbd5e1;
+      }
+
+      /* ==========================================================================
+   TOAST NOTIFICATION
+   ========================================================================== */
+      .toast {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: #1e293b;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 30px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        box-shadow: var(--shadow-lg);
+        opacity: 0;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        z-index: 1000;
+      }
+
+      .toast.show {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div style="display: flex; justify-content: center; align-items: flex-end; gap: 8px; flex-wrap: wrap;">
+          <h1>Tamil OCR Pro - Extract <span style="color: var(--brand);">தமிழ்</span> Text from Images </h1>
+          <button class="info-btn" id="infoBtn" title="Features & Limitations">
+            <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </button>
+        </div>
+        <p>Secure, client-side text extraction powered by AI.</p>
+      </header>
+      <div class="grid">
+        <div class="card">
+          <div class="section-title">Extraction Settings</div>
+          <div class="segmented-control" id="langToggle">
+            <button class="active" data-lang="tam">Tamil</button>
+            <button data-lang="eng">English</button>
+            <button data-lang="tam+eng">Tamil + English</button>
+          </div>
+          <div class="toggle-wrapper">
+            <div class="toggle-text">
+              <strong>Enhance Scan (Live Preview)</strong>
+              <span>Toggle to auto-clean shadows and paper textures</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="cvToggle">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="dropzone" id="dropzone">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+            </svg>
+            <p>Drop image here or click to browse</p>
+            <span>Supports JPG, PNG, WEBP, GIF (or Paste)</span>
+            <input type="file" id="fileInput" accept="image/*" style="display:none">
+            <canvas id="hiddenCanvas" style="display:none;"></canvas>
+            <div class="preview-container" id="previewContainer">
+              <img id="previewImage" alt="Preview" />
+              <button class="clear-btn" id="clearBtn" title="Remove image">✕</button>
+            </div>
+          </div>
+          <div class="status-area">
+            <div class="status-header">
+              <span id="statusMessage">Awaiting image...</span>
+              <span id="statusPercent"></span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+          </div>
+          <button class="btn-primary" id="runBtn" disabled>
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg> Extract Text </button>
+        </div>
+        <div class="card">
+          <div class="section-title"> Extracted Output <span class="stats" id="textStats">0 Words | 0 Chars</span>
+          </div>
+          <textarea class="output-area" id="outputBox" placeholder="Text will be extracted here... Feel free to edit it directly." spellcheck="false"></textarea>
+          <div class="action-row">
+            <button class="btn-secondary" id="copyBtn">Copy to Clipboard</button>
+            <button class="btn-secondary" id="downloadBtn">Export as .TXT</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-overlay" id="infoModal">
+      <div class="modal-content">
+        <button class="modal-close" id="closeModalBtn">
+          <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+        <h2>About Tamil OCR Pro</h2>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">This tool runs entirely in your browser, guaranteeing 100% privacy.</p>
+        <h3>✨ Pro Features</h3>
+        <ul>
+          <li>
+            <strong>Pixel-Perfect Spacing:</strong> Reconstructs paragraphs natively to match the original image.
+          </li>
+          <li>
+            <strong>Live Enhance Scan:</strong> Uses OpenCV math to eliminate shadows and paper textures in real-time.
+          </li>
+          <li>
+            <strong>Zero Server Costs:</strong> Since your computer does the processing, it's totally free with no limits.
+          </li>
+          <li>
+            <strong>Ghost Character Removal:</strong> Strips invisible ZWNJ Unicode artifacts so text pastes cleanly into Notepad/Word.
+          </li>
+        </ul>
+        <h3>⚠️ Known Limitations</h3>
+        <ul>
+          <li>
+            <strong>Handwriting:</strong> Not supported. The AI model is heavily optimized for printed text only.
+          </li>
+          <li>
+            <strong>Files:</strong> Only processes images (JPG, PNG, WEBP). Does not support multi-page PDFs or DOCX files.
+          </li>
+          <li>
+            <strong>Hardware:</strong> Heavy images may take longer to process on older mobile devices.
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div class="toast" id="toast">Text copied to clipboard!</div>
+    <script>
+      /**
+       * 1. STATE & GLOBAL VARIABLES
+       */
+      let file = null;
+      let originalImageSrc = null; // Stores the raw uploaded image
+      let lang = "tam";
+      let worker = null;
+      let currentWorkerLang = null;
+      // OpenCV State
+      let useOpenCV = false;
+      let cvReady = false;
+
+      function onOpenCvReady() {
+        cv['onRuntimeInitialized'] = () => {
+          cvReady = true;
+          console.log("OpenCV engine loaded and ready.");
+        };
+      }
+      const els = {
+        langBtns: document.querySelectorAll('.segmented-control button'),
+        cvToggle: document.getElementById('cvToggle'),
+        dropzone: document.getElementById('dropzone'),
+        fileInput: document.getElementById('fileInput'),
+        previewContainer: document.getElementById('previewContainer'),
+        previewImage: document.getElementById('previewImage'),
+        hiddenCanvas: document.getElementById('hiddenCanvas'),
+        clearBtn: document.getElementById('clearBtn'),
+        runBtn: document.getElementById('runBtn'),
+        statusMessage: document.getElementById('statusMessage'),
+        statusPercent: document.getElementById('statusPercent'),
+        progressFill: document.getElementById('progressFill'),
+        outputBox: document.getElementById('outputBox'),
+        textStats: document.getElementById('textStats'),
+        copyBtn: document.getElementById('copyBtn'),
+        downloadBtn: document.getElementById('downloadBtn'),
+        toast: document.getElementById('toast')
+      };
+      /**
+       * 2. EVENT LISTENERS
+       */
+      // Info Modal Logic
+      const infoModal = document.getElementById('infoModal');
+      document.getElementById('infoBtn').addEventListener('click', () => infoModal.classList.add('show'));
+      document.getElementById('closeModalBtn').addEventListener('click', () => infoModal.classList.remove('show'));
+      infoModal.addEventListener('click', (e) => {
+        if (e.target === infoModal) infoModal.classList.remove('show');
+      });
+      els.langBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          els.langBtns.forEach(b => b.classList.remove('active'));
+          e.target.classList.add('active');
+          lang = e.target.dataset.lang;
+        });
+      });
+      // Live Visual Update when Toggling Enhance Mode
+      els.cvToggle.addEventListener('change', (e) => {
+        if (e.target.checked && !cvReady) {
+          showToast("Visual engine is still loading, please wait a moment.");
+          e.target.checked = false;
+          return;
+        }
+        useOpenCV = e.target.checked;
+        if (originalImageSrc) applyLivePreview();
+      });
+      els.dropzone.addEventListener('click', () => !file && els.fileInput.click());
+      els.fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+      els.dropzone.addEventListener('dragover', e => {
+        e.preventDefault();
+        els.dropzone.classList.add('drag');
+      });
+      els.dropzone.addEventListener('dragleave', () => els.dropzone.classList.remove('drag'));
+      els.dropzone.addEventListener('drop', e => {
+        e.preventDefault();
+        els.dropzone.classList.remove('drag');
+        handleFile(e.dataTransfer.files[0]);
+      });
+      document.addEventListener('paste', e => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let item of items) {
+          if (item.type.indexOf('image') === 0) {
+            handleFile(item.getAsFile());
+          }
+        }
+      });
+      els.clearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        file = null;
+        originalImageSrc = null;
+        els.fileInput.value = '';
+        els.previewContainer.style.display = 'none';
+        els.previewImage.src = '';
+        els.runBtn.disabled = true;
+        updateStatus('Awaiting image...', 0);
+      });
+      els.runBtn.addEventListener('click', runOCR);
+      els.outputBox.addEventListener('input', updateStats);
+      els.copyBtn.addEventListener('click', copyText);
+      els.downloadBtn.addEventListener('click', downloadTxt);
+      /**
+       * 3. FILE HANDLING & LIVE PREVIEW PIPELINE
+       */
+      function handleFile(f) {
+        if (!f || !f.type.startsWith('image/')) {
+          showToast("Please upload a valid image file.");
+          return;
+        }
+        file = f;
+        els.runBtn.disabled = true;
+        updateStatus('Loading image...', 0);
+        const reader = new FileReader();
+        reader.onload = e => {
+          originalImageSrc = e.target.result;
+          applyLivePreview();
+        };
+        reader.readAsDataURL(f);
+      }
+      // Function to process the image and update the visual preview container
+      function applyLivePreview() {
+        const img = new Image();
+        img.onload = () => {
+          const processedCanvas = preprocess(img);
+          els.previewImage.src = processedCanvas.toDataURL();
+          els.previewContainer.style.display = 'block';
+          els.runBtn.disabled = false;
+          updateStatus('Ready to extract.', 0);
+        };
+        img.src = originalImageSrc;
+      }
+
+      function updateStatus(msg, percent) {
+        els.statusMessage.innerText = msg;
+        if (percent !== null && percent !== undefined) {
+          els.progressFill.style.width = `${percent}%`;
+          els.statusPercent.innerText = percent > 0 ? `${Math.round(percent)}%` : '';
+        }
+      }
+
+      function updateStats() {
+        const text = els.outputBox.value;
+        const chars = text.length;
+        const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+        els.textStats.innerText = `${words} Words | ${chars} Chars`;
+      }
+
+      function showToast(msg = "Text copied to clipboard!") {
+        els.toast.innerText = msg;
+        els.toast.classList.add('show');
+        setTimeout(() => els.toast.classList.remove('show'), 3000);
+      }
+      /**
+       * 4. HYBRID PREPROCESSING (Live Preview Ready)
+       */
+      function preprocess(img) {
+        const canvas = els.hiddenCanvas;
+        const ctx = canvas.getContext('2d', {
+          willReadFrequently: true
+        });
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        // PRO MODE: Robust Text Denoising + Adaptive Thresholding
+        if (useOpenCV && cvReady && typeof cv !== 'undefined') {
+          try {
+            let src = cv.imread(img);
+            let dst = new cv.Mat();
+            cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
+            cv.medianBlur(src, src, 3);
+            cv.adaptiveThreshold(src, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 15);
+            cv.imshow(canvas, dst);
+            src.delete();
+            dst.delete();
+            return canvas;
+          } catch (err) {
+            console.warn("OpenCV enhancement failed, falling back to basic processing.");
+          }
+        }
+        // FAST MODE: Standard JavaScript fallback (High accuracy for clean images)
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = data.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
+          const val = avg > 140 ? 255 : 0;
+          d[i] = d[i + 1] = d[i + 2] = val;
+        }
+        ctx.putImageData(data, 0, 0);
+        return canvas;
+      }
+      /**
+       * 5. TESSERACT ENGINE MANAGEMENT
+       */
+      async function getWorker(targetLang) {
+        if (worker && currentWorkerLang === targetLang) return worker;
+        if (worker) {
+          await worker.terminate();
+          worker = null;
+        }
+        updateStatus('Initializing AI Engine...', 5);
+        worker = await Tesseract.createWorker(targetLang, 1, {
+          logger: m => {
+            if (m.status === 'recognizing text' && m.progress) {
+              updateStatus('Extracting text...', m.progress * 100);
+            }
+          }
+        });
+        // We use PSM 6 to force Tesseract to read strictly top-to-bottom, line-by-line.
+        // We will handle the paragraph spacing ourselves using pixel math below.
+        await worker.setParameters({
+          tessedit_pageseg_mode: 6,
+          preserve_interword_spaces: '1'
+        });
+        currentWorkerLang = targetLang;
+        return worker;
+      }
+      /**
+       * 6. CORE EXECUTION & PHYSICAL PIXEL SPACING
+       */
+      async function runOCR() {
+        if (!file) return;
+        els.runBtn.disabled = true;
+        els.outputBox.value = "";
+        try {
+          if (els.previewImage.naturalWidth === 0) throw new Error("Image not fully loaded.");
+          updateStatus('Analyzing structure...', 2);
+          const activeWorker = await getWorker(lang);
+          // Extract the raw data object containing the physical pixel coordinates of every line
+          const {
+            data
+          } = await activeWorker.recognize(els.hiddenCanvas);
+          let reconstructedText = "";
+          // CUSTOM PHYSICAL SPACING ENGINE
+          if (data.lines && data.lines.length > 0) {
+            // Start with the first line
+            reconstructedText = data.lines[0].text.trim();
+            for (let i = 1; i < data.lines.length; i++) {
+              const prevBox = data.lines[i - 1].bbox; // Previous line's pixel coordinates
+              const currBox = data.lines[i].bbox; // Current line's pixel coordinates
+              // Calculate the height of the previous line
+              const prevLineHeight = prevBox.y1 - prevBox.y0;
+              // Calculate the vertical distance from the top of the prev line to the top of the current line
+              const verticalDistance = currBox.y0 - prevBox.y0;
+              // Standard spacing is ~1.1x to 1.3x the line height. 
+              // If the distance is greater than 1.6x, it means there is a physical gap (a paragraph break!)
+              if (verticalDistance > prevLineHeight * 1.6) {
+                reconstructedText += "\n\n" + data.lines[i].text.trim(); // Add double space
+              } else {
+                reconstructedText += "\n" + data.lines[i].text.trim(); // Add single space
+              }
+            }
+          } else {
+            reconstructedText = data.text; // Fallback just in case
+          }
+          // PRO CLEANUP: Strip ZWNJ, ZWJ, and other invisible ghosts that break Notepad++
+          let cleanedText = reconstructedText.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+          els.outputBox.value = cleanedText || "No text detected in this image.";
+          updateStatus('Extraction complete!', 100);
+        } catch (e) {
+          console.error("OCR Error:", e);
+          els.outputBox.value = "Error processing image. Please try a different image.";
+          updateStatus('Extraction failed.', 0);
+        } finally {
+          els.runBtn.disabled = false;
+          updateStats();
+          setTimeout(() => {
+            if (!els.runBtn.disabled) updateStatus('Ready for next extraction.', 0);
+          }, 2500);
+        }
+      }
+      /**
+       * 7. EXPORT HELPERS
+       */
+      function copyText() {
+        const text = els.outputBox.value;
+        if (!text) {
+          showToast("Nothing to copy!");
+          return;
+        }
+        navigator.clipboard.writeText(text);
+        showToast();
+      }
+
+      function downloadTxt() {
+        const text = els.outputBox.value;
+        if (!text) {
+          showToast("Nothing to export!");
+          return;
+        }
+        const blob = new Blob([text], {
+          type: 'text/plain'
+        });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `OCR_Export_${new Date().getTime()}.txt`;
+        a.click();
+      }
+    </script>
+  </body>
 </html>
