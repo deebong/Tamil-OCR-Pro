@@ -851,40 +851,56 @@
        * 4. HYBRID PREPROCESSING (Live Preview Ready)
        */
       function preprocess(img) {
-        const canvas = els.hiddenCanvas;
-        const ctx = canvas.getContext('2d', {
-          willReadFrequently: true
-        });
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        // PRO MODE: Robust Text Denoising + Adaptive Thresholding
-        if (useOpenCV && cvReady && typeof cv !== 'undefined') {
-          try {
-            let src = cv.imread(img);
-            let dst = new cv.Mat();
-            cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
-            cv.medianBlur(src, src, 3);
-            cv.adaptiveThreshold(src, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 15);
-            cv.imshow(canvas, dst);
-            src.delete();
-            dst.delete();
-            return canvas;
-          } catch (err) {
-            console.warn("OpenCV enhancement failed, falling back to basic processing.");
-          }
-        }
-        // FAST MODE: Standard JavaScript fallback (High accuracy for clean images)
-        ctx.drawImage(img, 0, 0);
-        const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const d = data.data;
-        for (let i = 0; i < d.length; i += 4) {
-          const avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
-          const val = avg > 140 ? 255 : 0;
-          d[i] = d[i + 1] = d[i + 2] = val;
-        }
-        ctx.putImageData(data, 0, 0);
-        return canvas;
-      }
+  const canvas = els.hiddenCanvas;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+
+  if (useOpenCV && cvReady && typeof cv !== 'undefined') {
+    try {
+      let src = cv.imread(img);
+      let dst = new cv.Mat();
+
+      cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
+      cv.medianBlur(src, src, 3);
+      cv.adaptiveThreshold(
+        src,
+        dst,
+        255,
+        cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv.THRESH_BINARY,
+        31,
+        15
+      );
+
+      cv.imshow(canvas, dst);
+      src.delete();
+      dst.delete();
+
+      return canvas;
+    } catch (err) {
+      console.warn("OpenCV failed, fallback triggered");
+    }
+  }
+
+  // ✅ FIXED: Tamil-safe contrast (NO threshold)
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = data.data;
+
+  for (let i = 0; i < d.length; i += 4) {
+    let avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
+
+    let val = avg * 1.2;
+    val = Math.max(0, Math.min(255, val));
+
+    d[i] = d[i + 1] = d[i + 2] = val;
+  }
+
+  ctx.putImageData(data, 0, 0);
+  return canvas;
+}
       /**
        * 5. TESSERACT ENGINE MANAGEMENT
        */
@@ -915,56 +931,85 @@
        * 6. CORE EXECUTION & PHYSICAL PIXEL SPACING
        */
       async function runOCR() {
-        if (!file) return;
-        els.runBtn.disabled = true;
-        els.outputBox.value = "";
-        try {
-          if (els.previewImage.naturalWidth === 0) throw new Error("Image not fully loaded.");
-          updateStatus('Analyzing structure...', 2);
-          const activeWorker = await getWorker(lang);
-          // Extract the raw data object containing the physical pixel coordinates of every line
-          const {
-            data
-          } = await activeWorker.recognize(els.hiddenCanvas);
-          let reconstructedText = "";
-          // CUSTOM PHYSICAL SPACING ENGINE
-          if (data.lines && data.lines.length > 0) {
-            // Start with the first line
-            reconstructedText = data.lines[0].text.trim();
-            for (let i = 1; i < data.lines.length; i++) {
-              const prevBox = data.lines[i - 1].bbox; // Previous line's pixel coordinates
-              const currBox = data.lines[i].bbox; // Current line's pixel coordinates
-              // Calculate the height of the previous line
-              const prevLineHeight = prevBox.y1 - prevBox.y0;
-              // Calculate the vertical distance from the top of the prev line to the top of the current line
-              const verticalDistance = currBox.y0 - prevBox.y0;
-              // Standard spacing is ~1.1x to 1.3x the line height. 
-              // If the distance is greater than 1.6x, it means there is a physical gap (a paragraph break!)
-              if (verticalDistance > prevLineHeight * 1.6) {
-                reconstructedText += "\n\n" + data.lines[i].text.trim(); // Add double space
-              } else {
-                reconstructedText += "\n" + data.lines[i].text.trim(); // Add single space
-              }
-            }
-          } else {
-            reconstructedText = data.text; // Fallback just in case
-          }
-          // PRO CLEANUP: Strip ZWNJ, ZWJ, and other invisible ghosts that break Notepad++
-          let cleanedText = reconstructedText.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-          els.outputBox.value = cleanedText || "No text detected in this image.";
-          updateStatus('Extraction complete!', 100);
-        } catch (e) {
-          console.error("OCR Error:", e);
-          els.outputBox.value = "Error processing image. Please try a different image.";
-          updateStatus('Extraction failed.', 0);
-        } finally {
-          els.runBtn.disabled = false;
-          updateStats();
-          setTimeout(() => {
-            if (!els.runBtn.disabled) updateStatus('Ready for next extraction.', 0);
-          }, 2500);
+  if (!file) return;
+
+  els.runBtn.disabled = true;
+  els.outputBox.value = "";
+
+  try {
+    if (els.previewImage.naturalWidth === 0)
+      throw new Error("Image not fully loaded.");
+
+    updateStatus('Analyzing structure...', 2);
+
+    const activeWorker = await getWorker(lang);
+
+    // ✅ FIXED INPUT SOURCE
+    const inputImage = useOpenCV
+      ? els.hiddenCanvas
+      : els.previewImage;
+
+    let result = await activeWorker.recognize(inputImage);
+    let data = result.data;
+    let text = data.text.trim();
+
+    // ✅ SAFE FALLBACK (prevents garbage English override)
+    if (text.length < 20 && useOpenCV) {
+      const fallback = await activeWorker.recognize(els.previewImage);
+
+      if (fallback.data.text.length > text.length) {
+        data = fallback.data;
+        text = fallback.data.text.trim();
+      }
+    }
+
+    // ===== YOUR ORIGINAL PARAGRAPH ENGINE (UNCHANGED) =====
+    let reconstructedText = "";
+
+    if (data.lines && data.lines.length > 0) {
+      reconstructedText = data.lines[0].text.trim();
+
+      for (let i = 1; i < data.lines.length; i++) {
+        const prevBox = data.lines[i - 1].bbox;
+        const currBox = data.lines[i].bbox;
+
+        const prevLineHeight = prevBox.y1 - prevBox.y0;
+        const verticalDistance = currBox.y0 - prevBox.y0;
+
+        if (verticalDistance > prevLineHeight * 1.6) {
+          reconstructedText += "\n\n" + data.lines[i].text.trim();
+        } else {
+          reconstructedText += "\n" + data.lines[i].text.trim();
         }
       }
+    } else {
+      reconstructedText = text;
+    }
+
+    let cleanedText = reconstructedText
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim();
+
+    els.outputBox.value =
+      cleanedText || "No text detected in this image.";
+
+    updateStatus('Extraction complete!', 100);
+
+  } catch (e) {
+    console.error("OCR Error:", e);
+    els.outputBox.value =
+      "Error processing image. Please try a different image.";
+    updateStatus('Extraction failed.', 0);
+  } finally {
+    els.runBtn.disabled = false;
+    updateStats();
+
+    setTimeout(() => {
+      if (!els.runBtn.disabled)
+        updateStatus('Ready for next extraction.', 0);
+    }, 2500);
+  }
+}
       /**
        * 7. EXPORT HELPERS
        */
