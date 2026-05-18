@@ -19,6 +19,14 @@ This tool combines the power of two WebAssembly (WASM) engines, orchestrated by 
 2. **OpenCV.js:** Used for the "Enhance Scan" feature. It applies a mathematical pipeline (`cv.cvtColor` -> `cv.medianBlur` -> `cv.adaptiveThreshold`) to isolate text from noisy backgrounds, shadows, and paper textures.
 3. **Vanilla JS & Canvas API:** Handles the lightweight fallback preprocessing, UI state management, and file decoding (supporting JPG, PNG, WEBP, GIF).
 
+## ⚠️ Known Limitations
+
+Because this tool operates entirely within the browser to guarantee privacy and zero server costs, it has a few strict hardware and AI limitations:
+
+* **Handwriting is Unsupported:** The client-side Tesseract.js model is highly optimized for *printed* text (books, screenshots, scans). It lacks the heavy neural-network parameters required to accurately decipher complex human handwriting.
+* **No PDF/Document Parsing:** The tool supports standard image formats (`JPG`, `PNG`, `WEBP`, `GIF`). It cannot natively parse multi-page `PDF`, `DOCX`, or `TXT` files because the necessary binary decoders are too large for a lightweight browser script.
+* **Memory Limits:** Extremely massive images (e.g., 50+ Megapixels) might cause the browser tab to crash on older mobile devices due to WebAssembly RAM allocation limits.
+  
 ## 🚀 Getting Started
 
 Since this is a client-side tool, there is no build step or server required!
