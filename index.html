@@ -549,6 +549,10 @@
         background: var(--bg);
         border-color: #cbd5e1;
       }
+      
+      .btn-clear {
+        color: #ef4444;
+      }
 
       /* ==========================================================================
    TOAST NOTIFICATION
@@ -639,8 +643,9 @@
           </div>
           <textarea class="output-area" id="outputBox" placeholder="Text will be extracted here... Feel free to edit it directly." spellcheck="false"></textarea>
           <div class="action-row">
-            <button class="btn-secondary" id="copyBtn">Copy to Clipboard</button>
-            <button class="btn-secondary" id="downloadBtn">Export as .TXT</button>
+            <button class="btn-secondary" id="copyBtn">Copy</button>
+            <button class="btn-secondary" id="downloadBtn">Export .TXT</button>
+            <button class="btn-secondary btn-clear" id="clearTextBtn">Clear</button>
           </div>
         </div>
       </div>
@@ -720,6 +725,7 @@
         textStats: document.getElementById('textStats'),
         copyBtn: document.getElementById('copyBtn'),
         downloadBtn: document.getElementById('downloadBtn'),
+        clearTextBtn: document.getElementById('clearTextBtn'),
         toast: document.getElementById('toast')
       };
       /**
@@ -783,6 +789,13 @@
       els.outputBox.addEventListener('input', updateStats);
       els.copyBtn.addEventListener('click', copyText);
       els.downloadBtn.addEventListener('click', downloadTxt);
+      
+      // Clear Text Button Logic
+      els.clearTextBtn.addEventListener('click', () => {
+        els.outputBox.value = '';
+        updateStats();
+      });
+
       /**
        * 3. FILE HANDLING & LIVE PREVIEW PIPELINE
        */
