@@ -2,6 +2,8 @@
 
 A production-grade, 100% client-side Optical Character Recognition (OCR) web application optimized for Tamil and English text. Built entirely in a single HTML file, it requires absolutely no backend, ensuring complete user privacy and zero server costs.
 
+<img width="1667" height="853" alt="screenshot" src="https://github.com/user-attachments/assets/59c97957-2028-4856-96c5-801f18d30461" />
+
 ## ✨ Features
 
 * **🔒 100% Private & Serverless:** Images are processed entirely in the browser's memory using WebAssembly. No data is ever uploaded to a server.
