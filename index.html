@@ -42,7 +42,6 @@
         line-height: 1.5;
         min-height: 100vh;
         padding: 20px;
-        /* Removed the strict overflow: hidden to allow natural scrolling on all devices */
         display: flex;
         justify-content: center;
       }
@@ -169,14 +168,12 @@
         margin-bottom: 8px;
       }
 
-      /* Custom Scrollbar for Modal to preserve rounded corners */
       .modal-content::-webkit-scrollbar {
         width: 8px;
       }
 
       .modal-content::-webkit-scrollbar-track {
         background: transparent;
-        /* This margin pushes the scrollbar track away from the rounded corners */
         margin: 16px 0;
       }
 
@@ -198,7 +195,6 @@
         gap: 24px;
       }
 
-      /* Desktop Grid */
       @media(min-width: 860px) {
         .grid {
           display: grid;
@@ -604,7 +600,7 @@
           <div class="toggle-wrapper">
             <div class="toggle-text">
               <strong>Enhance Scan (Live Preview)</strong>
-              <span>Toggle to auto-clean shadows and paper textures</span>
+              <span>Applies CLAHE, multi-scale, and removes shadows</span>
             </div>
             <label class="switch">
               <input type="checkbox" id="cvToggle">
@@ -662,13 +658,13 @@
         <h3>✨ Pro Features</h3>
         <ul>
           <li>
-            <strong>Pixel-Perfect Spacing:</strong> Reconstructs paragraphs natively to match the original image.
+            <strong>Smart Tamil Scoring:</strong> Intelligently detects bad outputs and runs multi-scale fallback logic to save poor captures.
           </li>
           <li>
-            <strong>Live Enhance Scan:</strong> Uses OpenCV math to eliminate shadows and paper textures in real-time.
+            <strong>Advanced Document Reconstruction:</strong> Reconstructs paragraphs perfectly by analyzing both vertical line height and horizontal indentation.
           </li>
           <li>
-            <strong>Zero Server Costs:</strong> Since your computer does the processing, it's totally free with no limits.
+            <strong>Live Enhance Scan:</strong> Uses OpenCV CLAHE and Morphological Operations to fix uneven mobile lighting and reconstruct broken text in old prints.
           </li>
           <li>
             <strong>Ghost Character Removal:</strong> Strips invisible ZWNJ Unicode artifacts so text pastes cleanly into Notepad/Word.
@@ -677,13 +673,10 @@
         <h3>⚠️ Known Limitations</h3>
         <ul>
           <li>
-            <strong>Handwriting:</strong> Not supported. The AI model is heavily optimized for printed text only.
+            <strong>Handwriting:</strong> Not supported. The AI model is optimized strictly for printed text.
           </li>
           <li>
-            <strong>Files:</strong> Only processes images (JPG, PNG, WEBP). Does not support multi-page PDFs or DOCX files.
-          </li>
-          <li>
-            <strong>Hardware:</strong> Heavy images may take longer to process on older mobile devices.
+            <strong>Hardware:</strong> Because we process images locally with multi-scale AI, large images may take longer on older mobile devices.
           </li>
         </ul>
       </div>
@@ -694,10 +687,11 @@
        * 1. STATE & GLOBAL VARIABLES
        */
       let file = null;
-      let originalImageSrc = null; // Stores the raw uploaded image
+      let originalImageSrc = null; 
       let lang = "tam";
       let worker = null;
       let currentWorkerLang = null;
+      
       // OpenCV State
       let useOpenCV = false;
       let cvReady = false;
@@ -728,16 +722,17 @@
         clearTextBtn: document.getElementById('clearTextBtn'),
         toast: document.getElementById('toast')
       };
+
       /**
        * 2. EVENT LISTENERS
        */
-      // Info Modal Logic
       const infoModal = document.getElementById('infoModal');
       document.getElementById('infoBtn').addEventListener('click', () => infoModal.classList.add('show'));
       document.getElementById('closeModalBtn').addEventListener('click', () => infoModal.classList.remove('show'));
       infoModal.addEventListener('click', (e) => {
         if (e.target === infoModal) infoModal.classList.remove('show');
       });
+
       els.langBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
           els.langBtns.forEach(b => b.classList.remove('active'));
@@ -745,7 +740,7 @@
           lang = e.target.dataset.lang;
         });
       });
-      // Live Visual Update when Toggling Enhance Mode
+
       els.cvToggle.addEventListener('change', (e) => {
         if (e.target.checked && !cvReady) {
           showToast("Visual engine is still loading, please wait a moment.");
@@ -755,6 +750,7 @@
         useOpenCV = e.target.checked;
         if (originalImageSrc) applyLivePreview();
       });
+
       els.dropzone.addEventListener('click', () => !file && els.fileInput.click());
       els.fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
       els.dropzone.addEventListener('dragover', e => {
@@ -767,6 +763,7 @@
         els.dropzone.classList.remove('drag');
         handleFile(e.dataTransfer.files[0]);
       });
+
       document.addEventListener('paste', e => {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
         for (let item of items) {
@@ -775,6 +772,7 @@
           }
         }
       });
+
       els.clearBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         file = null;
@@ -785,12 +783,12 @@
         els.runBtn.disabled = true;
         updateStatus('Awaiting image...', 0);
       });
+
       els.runBtn.addEventListener('click', runOCR);
       els.outputBox.addEventListener('input', updateStats);
       els.copyBtn.addEventListener('click', copyText);
       els.downloadBtn.addEventListener('click', downloadTxt);
       
-      // Clear Text Button Logic
       els.clearTextBtn.addEventListener('click', () => {
         els.outputBox.value = '';
         updateStats();
@@ -814,7 +812,7 @@
         };
         reader.readAsDataURL(f);
       }
-      // Function to process the image and update the visual preview container
+
       function applyLivePreview() {
         const img = new Image();
         img.onload = () => {
@@ -847,63 +845,87 @@
         els.toast.classList.add('show');
         setTimeout(() => els.toast.classList.remove('show'), 3000);
       }
+
       /**
-       * 4. HYBRID PREPROCESSING (Live Preview Ready)
+       * 4. HYBRID PREPROCESSING (Multi-Scale & CLAHE Enhanced)
        */
       function preprocess(img) {
-  const canvas = els.hiddenCanvas;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const canvas = els.hiddenCanvas;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
+        // Multi-scale Upscaling for better Tesseract detection on mobile captures
+        const scaleFactor = 1.5; 
+        canvas.width = img.naturalWidth * scaleFactor;
+        canvas.height = img.naturalHeight * scaleFactor;
+        
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  if (useOpenCV && cvReady && typeof cv !== 'undefined') {
-    try {
-      let src = cv.imread(img);
-      let dst = new cv.Mat();
+        if (useOpenCV && cvReady && typeof cv !== 'undefined') {
+          try {
+            let src = cv.imread(canvas);
+            let dst = new cv.Mat();
 
-      cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
-      cv.medianBlur(src, src, 3);
-      cv.adaptiveThreshold(
-        src,
-        dst,
-        255,
-        cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv.THRESH_BINARY,
-        31,
-        15
-      );
+            cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
 
-      cv.imshow(canvas, dst);
-      src.delete();
-      dst.delete();
+            // CLAHE (Contrast Limited Adaptive Histogram Equalization) 
+            // Excellent for fixing uneven lighting and shadows on mobile document captures.
+            let clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
+            clahe.apply(src, src);
+            clahe.delete();
 
-      return canvas;
-    } catch (err) {
-      console.warn("OpenCV failed, fallback triggered");
-    }
-  }
+            cv.medianBlur(src, src, 3);
+            cv.adaptiveThreshold(
+              src,
+              dst,
+              255,
+              cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+              cv.THRESH_BINARY,
+              31,
+              15
+            );
 
-  // ✅ FIXED: Tamil-safe contrast (NO threshold)
-  ctx.drawImage(img, 0, 0);
-  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = data.data;
+            // Subtle morphological erosion to slightly thicken old, broken printed text.
+            // Because our text is black (0) and background is white (255) after Threshold, Erode expands the black areas.
+            let M = cv.Mat.ones(2, 2, cv.CV_8U);
+            cv.erode(dst, dst, M, new cv.Point(-1, -1), 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+            M.delete();
 
-  for (let i = 0; i < d.length; i += 4) {
-    let avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
+            cv.imshow(canvas, dst);
+            src.delete();
+            dst.delete();
 
-    let val = avg * 1.2;
-    val = Math.max(0, Math.min(255, val));
+            return canvas;
+          } catch (err) {
+            console.warn("OpenCV pipeline failed, fallback triggered", err);
+          }
+        }
 
-    d[i] = d[i + 1] = d[i + 2] = val;
-  }
+        // Safe Fallback Contrast
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = data.data;
 
-  ctx.putImageData(data, 0, 0);
-  return canvas;
-}
+        for (let i = 0; i < d.length; i += 4) {
+          let avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
+          let val = avg * 1.2;
+          val = Math.max(0, Math.min(255, val));
+          d[i] = d[i + 1] = d[i + 2] = val;
+        }
+
+        ctx.putImageData(data, 0, 0);
+        return canvas;
+      }
+
       /**
-       * 5. TESSERACT ENGINE MANAGEMENT
+       * 5. SMART TAMIL SCORING & TESSERACT ENGINE
        */
+      function getTamilCharacterDensity(text) {
+        if (!text) return 0;
+        const noSpaces = text.replace(/\s/g, '');
+        if (noSpaces.length === 0) return 0;
+        const tamilChars = noSpaces.match(/[\u0B80-\u0BFF]/g);
+        return tamilChars ? (tamilChars.length / noSpaces.length) : 0;
+      }
+
       async function getWorker(targetLang) {
         if (worker && currentWorkerLang === targetLang) return worker;
         if (worker) {
@@ -918,8 +940,7 @@
             }
           }
         });
-        // We use PSM 6 to force Tesseract to read strictly top-to-bottom, line-by-line.
-        // We will handle the paragraph spacing ourselves using pixel math below.
+        
         await worker.setParameters({
           tessedit_pageseg_mode: 6,
           preserve_interword_spaces: '1'
@@ -927,89 +948,100 @@
         currentWorkerLang = targetLang;
         return worker;
       }
+
       /**
-       * 6. CORE EXECUTION & PHYSICAL PIXEL SPACING
+       * 6. CORE EXECUTION & ADVANCED RECONSTRUCTION
        */
       async function runOCR() {
-  if (!file) return;
+        if (!file) return;
 
-  els.runBtn.disabled = true;
-  els.outputBox.value = "";
+        els.runBtn.disabled = true;
+        els.outputBox.value = "";
 
-  try {
-    if (els.previewImage.naturalWidth === 0)
-      throw new Error("Image not fully loaded.");
+        try {
+          if (els.previewImage.naturalWidth === 0) throw new Error("Image not fully loaded.");
 
-    updateStatus('Analyzing structure...', 2);
+          updateStatus('Analyzing structure...', 2);
+          const activeWorker = await getWorker(lang);
 
-    const activeWorker = await getWorker(lang);
+          const inputImage = useOpenCV ? els.hiddenCanvas : els.previewImage;
 
-    // ✅ FIXED INPUT SOURCE
-    const inputImage = useOpenCV
-      ? els.hiddenCanvas
-      : els.previewImage;
+          let result = await activeWorker.recognize(inputImage);
+          let data = result.data;
+          let text = data.text.trim();
+          let confidence = data.confidence;
 
-    let result = await activeWorker.recognize(inputImage);
-    let data = result.data;
-    let text = data.text.trim();
+          // Smart Scoring / Intelligent Fallback Evaluation
+          let isTamilMode = lang.includes('tam');
+          let density = isTamilMode ? getTamilCharacterDensity(text) : 1;
+          let needsFallback = false;
 
-    // ✅ SAFE FALLBACK (prevents garbage English override)
-    if (text.length < 20 && useOpenCV) {
-      const fallback = await activeWorker.recognize(els.previewImage);
+          // Evaluate if the enhanced preprocessing actually damaged the extraction 
+          // (happens when images have heavy noise getting exaggerated by CLAHE).
+          if (useOpenCV) {
+            if (text.length < 20) needsFallback = true;
+            else if (confidence < 50) needsFallback = true;
+            else if (isTamilMode && density < 0.25 && text.length > 10) needsFallback = true;
+          }
 
-      if (fallback.data.text.length > text.length) {
-        data = fallback.data;
-        text = fallback.data.text.trim();
-      }
-    }
+          if (needsFallback) {
+            updateStatus('Fixing low confidence score...', 50);
+            // Run on standard un-modified image scale/contrast to see if it performs better
+            const fallback = await activeWorker.recognize(els.previewImage);
+            const fallbackDensity = isTamilMode ? getTamilCharacterDensity(fallback.data.text) : 1;
 
-    // ===== YOUR ORIGINAL PARAGRAPH ENGINE (UNCHANGED) =====
-    let reconstructedText = "";
+            if (fallback.data.text.length > text.length * 1.2 || fallbackDensity > density) {
+               data = fallback.data;
+               text = fallback.data.text.trim();
+            }
+          }
 
-    if (data.lines && data.lines.length > 0) {
-      reconstructedText = data.lines[0].text.trim();
+          // Advanced Paragraph Reconstruction Engine
+          let reconstructedText = "";
 
-      for (let i = 1; i < data.lines.length; i++) {
-        const prevBox = data.lines[i - 1].bbox;
-        const currBox = data.lines[i].bbox;
+          if (data.lines && data.lines.length > 0) {
+            reconstructedText = data.lines[0].text.trim();
 
-        const prevLineHeight = prevBox.y1 - prevBox.y0;
-        const verticalDistance = currBox.y0 - prevBox.y0;
+            for (let i = 1; i < data.lines.length; i++) {
+              const prevBox = data.lines[i - 1].bbox;
+              const currBox = data.lines[i].bbox;
 
-        if (verticalDistance > prevLineHeight * 1.6) {
-          reconstructedText += "\n\n" + data.lines[i].text.trim();
-        } else {
-          reconstructedText += "\n" + data.lines[i].text.trim();
+              const prevLineHeight = prevBox.y1 - prevBox.y0;
+              const verticalDistance = currBox.y0 - prevBox.y0;
+              const horizontalIndent = currBox.x0 - prevBox.x0;
+
+              // Detects true paragraph breaks via vertical gaps OR horizontal indentation
+              if (verticalDistance > prevLineHeight * 1.6 || horizontalIndent > prevLineHeight * 2) {
+                reconstructedText += "\n\n" + data.lines[i].text.trim();
+              } else {
+                reconstructedText += "\n" + data.lines[i].text.trim();
+              }
+            }
+          } else {
+            reconstructedText = text;
+          }
+
+          let cleanedText = reconstructedText
+            .replace(/[\u200B-\u200D\uFEFF]/g, '')
+            .trim();
+
+          els.outputBox.value = cleanedText || "No text detected in this image.";
+          updateStatus('Extraction complete!', 100);
+
+        } catch (e) {
+          console.error("OCR Error:", e);
+          els.outputBox.value = "Error processing image. Please try a different image.";
+          updateStatus('Extraction failed.', 0);
+        } finally {
+          els.runBtn.disabled = false;
+          updateStats();
+
+          setTimeout(() => {
+            if (!els.runBtn.disabled) updateStatus('Ready for next extraction.', 0);
+          }, 2500);
         }
       }
-    } else {
-      reconstructedText = text;
-    }
 
-    let cleanedText = reconstructedText
-      .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .trim();
-
-    els.outputBox.value =
-      cleanedText || "No text detected in this image.";
-
-    updateStatus('Extraction complete!', 100);
-
-  } catch (e) {
-    console.error("OCR Error:", e);
-    els.outputBox.value =
-      "Error processing image. Please try a different image.";
-    updateStatus('Extraction failed.', 0);
-  } finally {
-    els.runBtn.disabled = false;
-    updateStats();
-
-    setTimeout(() => {
-      if (!els.runBtn.disabled)
-        updateStatus('Ready for next extraction.', 0);
-    }, 2500);
-  }
-}
       /**
        * 7. EXPORT HELPERS
        */
@@ -1029,9 +1061,7 @@
           showToast("Nothing to export!");
           return;
         }
-        const blob = new Blob([text], {
-          type: 'text/plain'
-        });
+        const blob = new Blob([text], { type: 'text/plain' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `OCR_Export_${new Date().getTime()}.txt`;
