@@ -286,6 +286,17 @@
         color: var(--text-muted);
       }
 
+      .sub-toggle {
+        font-size: 0.75rem;
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        color: var(--brand);
+        font-weight: 500;
+      }
+
       .switch {
         position: relative;
         display: inline-block;
@@ -600,7 +611,10 @@
           <div class="toggle-wrapper">
             <div class="toggle-text">
               <strong>Enhance Scan (Live Preview)</strong>
-              <span>Applies CLAHE, multi-scale, and removes shadows</span>
+              <span>Applies Deskew, Crop, CLAHE, and shadows</span>
+              <label class="sub-toggle">
+                <input type="checkbox" id="thinFontToggle" checked> Protect Thin Fonts (Safe Morphology)
+              </label>
             </div>
             <label class="switch">
               <input type="checkbox" id="cvToggle">
@@ -658,25 +672,25 @@
         <h3>✨ Pro Features</h3>
         <ul>
           <li>
-            <strong>Smart Tamil Scoring:</strong> Intelligently detects bad outputs and runs multi-scale fallback logic to save poor captures.
+            <strong>Smart Tamil Scoring:</strong> Intelligently detects bad outputs, garbage symbols, and runs multi-scale fallback logic to save poor captures.
+          </li>
+          <li>
+            <strong>True Deskew & Auto-Crop:</strong> Uses OpenCV Hough Lines to automatically straighten crooked photos and crop out useless margins.
           </li>
           <li>
             <strong>Advanced Document Reconstruction:</strong> Reconstructs paragraphs perfectly by analyzing both vertical line height and horizontal indentation.
           </li>
           <li>
-            <strong>Live Enhance Scan:</strong> Uses OpenCV CLAHE and Morphological Operations to fix uneven mobile lighting and reconstruct broken text in old prints.
+            <strong>Live Enhance Scan:</strong> Uses OpenCV CLAHE and conditional Morphological Operations to fix uneven mobile lighting while protecting thin Tamil fonts.
           </li>
           <li>
-            <strong>Ghost Character Removal:</strong> Strips invisible ZWNJ Unicode artifacts so text pastes cleanly into Notepad/Word.
+            <strong>Smart Memory Pool:</strong> Re-uses initialized AI language models to save processing time on subsequent extractions.
           </li>
         </ul>
         <h3>⚠️ Known Limitations</h3>
         <ul>
           <li>
             <strong>Handwriting:</strong> Not supported. The AI model is optimized strictly for printed text.
-          </li>
-          <li>
-            <strong>Hardware:</strong> Because we process images locally with multi-scale AI, large images may take longer on older mobile devices.
           </li>
         </ul>
       </div>
@@ -689,8 +703,7 @@
       let file = null;
       let originalImageSrc = null; 
       let lang = "tam";
-      let worker = null;
-      let currentWorkerLang = null;
+      let workerPool = {}; // Improved Worker Management
       
       // OpenCV State
       let useOpenCV = false;
@@ -702,9 +715,11 @@
           console.log("OpenCV engine loaded and ready.");
         };
       }
+      
       const els = {
         langBtns: document.querySelectorAll('.segmented-control button'),
         cvToggle: document.getElementById('cvToggle'),
+        thinFontToggle: document.getElementById('thinFontToggle'),
         dropzone: document.getElementById('dropzone'),
         fileInput: document.getElementById('fileInput'),
         previewContainer: document.getElementById('previewContainer'),
@@ -751,6 +766,10 @@
         if (originalImageSrc) applyLivePreview();
       });
 
+      els.thinFontToggle.addEventListener('change', () => {
+        if (useOpenCV && originalImageSrc) applyLivePreview();
+      });
+
       els.dropzone.addEventListener('click', () => !file && els.fileInput.click());
       els.fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
       els.dropzone.addEventListener('dragover', e => {
@@ -795,7 +814,7 @@
       });
 
       /**
-       * 3. FILE HANDLING & LIVE PREVIEW PIPELINE
+       * 3. FILE HANDLING & TRUE LIVE PREVIEW PIPELINE
        */
       function handleFile(f) {
         if (!f || !f.type.startsWith('image/')) {
@@ -814,6 +833,14 @@
       }
 
       function applyLivePreview() {
+        if (!useOpenCV) {
+          els.previewImage.src = originalImageSrc;
+          els.previewContainer.style.display = 'block';
+          els.runBtn.disabled = false;
+          updateStatus('Ready to extract.', 0);
+          return;
+        }
+
         const img = new Image();
         img.onload = () => {
           const processedCanvas = preprocess(img);
@@ -847,17 +874,26 @@
       }
 
       /**
-       * 4. HYBRID PREPROCESSING (Multi-Scale & CLAHE Enhanced)
+       * 4. HYBRID PREPROCESSING (Auto-Crop, Deskew, CLAHE, Safe Morphology)
        */
       function preprocess(img) {
         const canvas = els.hiddenCanvas;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-        // Multi-scale Upscaling for better Tesseract detection on mobile captures
-        const scaleFactor = 1.5; 
-        canvas.width = img.naturalWidth * scaleFactor;
-        canvas.height = img.naturalHeight * scaleFactor;
-        
+        // Performance Safety: Downscale extremely large images to prevent memory spikes
+        const MAX_DIMENSION = 2800;
+        let scaleFactor = 1.5; 
+        let targetWidth = img.naturalWidth * scaleFactor;
+        let targetHeight = img.naturalHeight * scaleFactor;
+
+        if (targetWidth > MAX_DIMENSION || targetHeight > MAX_DIMENSION) {
+          const ratio = Math.min(MAX_DIMENSION / targetWidth, MAX_DIMENSION / targetHeight);
+          targetWidth *= ratio;
+          targetHeight *= ratio;
+        }
+
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         if (useOpenCV && cvReady && typeof cv !== 'undefined') {
@@ -867,28 +903,93 @@
 
             cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
 
-            // CLAHE (Contrast Limited Adaptive Histogram Equalization) 
-            // Excellent for fixing uneven lighting and shadows on mobile document captures.
+            // CLAHE for lighting consistency
             let clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
             clahe.apply(src, src);
             clahe.delete();
 
-            cv.medianBlur(src, src, 3);
-            cv.adaptiveThreshold(
-              src,
-              dst,
-              255,
-              cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-              cv.THRESH_BINARY,
-              31,
-              15
-            );
+            // Temporary binary inverse for structural analysis (white text, black bg)
+            let binary = new cv.Mat();
+            cv.adaptiveThreshold(src, binary, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 31, 15);
 
-            // Subtle morphological erosion to slightly thicken old, broken printed text.
-            // Because our text is black (0) and background is white (255) after Threshold, Erode expands the black areas.
-            let M = cv.Mat.ones(2, 2, cv.CV_8U);
-            cv.erode(dst, dst, M, new cv.Point(-1, -1), 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
-            M.delete();
+            // 1. TRUE DESKEW CORRECTION
+            let lines = new cv.Mat();
+            cv.HoughLinesP(binary, lines, 1, Math.PI / 180, 100, 50, 10);
+            let angles = [];
+            
+            if (lines.rows > 0) {
+              for (let i = 0; i < lines.rows; ++i) {
+                let x1 = lines.data32S[i * 4];
+                let y1 = lines.data32S[i * 4 + 1];
+                let x2 = lines.data32S[i * 4 + 2];
+                let y2 = lines.data32S[i * 4 + 3];
+                let angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+                // Filter only mostly horizontal lines for text deskewing to avoid extreme rotations
+                if (angle > -15 && angle < 15) {
+                  angles.push(angle);
+                }
+              }
+            }
+            lines.delete();
+
+            if (angles.length > 0) {
+              angles.sort((a, b) => a - b);
+              let medianAngle = angles[Math.floor(angles.length / 2)];
+              if (Math.abs(medianAngle) > 0.5) {
+                let center = new cv.Point(src.cols / 2, src.rows / 2);
+                let M = cv.getRotationMatrix2D(center, medianAngle, 1.0);
+                cv.warpAffine(src, src, M, src.size(), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(255, 255, 255, 255));
+                cv.warpAffine(binary, binary, M, binary.size(), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(0, 0, 0, 255));
+                M.delete();
+              }
+            }
+
+            // 2. SMART AUTO-CROP
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+            cv.findContours(binary, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+            let minX = src.cols, minY = src.rows, maxX = 0, maxY = 0;
+            let validContours = 0;
+
+            for (let i = 0; i < contours.size(); ++i) {
+              let rect = cv.boundingRect(contours.get(i));
+              // Ignore tiny noise points
+              if (rect.width > 15 && rect.height > 15) {
+                minX = Math.min(minX, rect.x);
+                minY = Math.min(minY, rect.y);
+                maxX = Math.max(maxX, rect.x + rect.width);
+                maxY = Math.max(maxY, rect.y + rect.height);
+                validContours++;
+              }
+            }
+            contours.delete(); hierarchy.delete(); binary.delete();
+
+            if (validContours > 0 && maxX > minX && maxY > minY) {
+              // Add safe padding to preserve edge characters
+              let padding = 30;
+              minX = Math.max(0, minX - padding);
+              minY = Math.max(0, minY - padding);
+              maxX = Math.min(src.cols, maxX + padding);
+              maxY = Math.min(src.rows, maxY + padding);
+              
+              let rect = new cv.Rect(minX, minY, maxX - minX, maxY - minY);
+              src = src.roi(rect);
+              canvas.width = rect.width;
+              canvas.height = rect.height;
+            }
+
+            // 3. FINAL THRESHOLDING
+            cv.medianBlur(src, src, 3);
+            cv.adaptiveThreshold(src, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 15);
+
+            // 4. SAFER MORPHOLOGY
+            // Disable erosion if "Protect Thin Fonts" is active. Otherwise, apply lightly.
+            if (!els.thinFontToggle.checked) {
+              let M = cv.Mat.ones(2, 2, cv.CV_8U);
+              cv.erode(dst, dst, M, new cv.Point(-1, -1), 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+              M.delete();
+            }
 
             cv.imshow(canvas, dst);
             src.delete();
@@ -900,23 +1001,12 @@
           }
         }
 
-        // Safe Fallback Contrast
-        const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const d = data.data;
-
-        for (let i = 0; i < d.length; i += 4) {
-          let avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
-          let val = avg * 1.2;
-          val = Math.max(0, Math.min(255, val));
-          d[i] = d[i + 1] = d[i + 2] = val;
-        }
-
-        ctx.putImageData(data, 0, 0);
+        // Return original drawn canvas if OpenCV disabled/failed
         return canvas;
       }
 
       /**
-       * 5. SMART TAMIL SCORING & TESSERACT ENGINE
+       * 5. SMART TAMIL SCORING & WORKER POOLING
        */
       function getTamilCharacterDensity(text) {
         if (!text) return 0;
@@ -927,13 +1017,13 @@
       }
 
       async function getWorker(targetLang) {
-        if (worker && currentWorkerLang === targetLang) return worker;
-        if (worker) {
-          await worker.terminate();
-          worker = null;
+        if (workerPool[targetLang]) {
+          updateStatus('AI Engine Ready...', 10);
+          return workerPool[targetLang];
         }
-        updateStatus('Initializing AI Engine...', 5);
-        worker = await Tesseract.createWorker(targetLang, 1, {
+        
+        updateStatus(`Initializing AI Engine (${targetLang})...`, 5);
+        const newWorker = await Tesseract.createWorker(targetLang, 1, {
           logger: m => {
             if (m.status === 'recognizing text' && m.progress) {
               updateStatus('Extracting text...', m.progress * 100);
@@ -941,16 +1031,17 @@
           }
         });
         
-        await worker.setParameters({
+        await newWorker.setParameters({
           tessedit_pageseg_mode: 6,
           preserve_interword_spaces: '1'
         });
-        currentWorkerLang = targetLang;
-        return worker;
+        
+        workerPool[targetLang] = newWorker;
+        return newWorker;
       }
 
       /**
-       * 6. CORE EXECUTION & ADVANCED RECONSTRUCTION
+       * 6. CORE EXECUTION, ADVANCED FILTERING & RECONSTRUCTION
        */
       async function runOCR() {
         if (!file) return;
@@ -959,7 +1050,7 @@
         els.outputBox.value = "";
 
         try {
-          if (els.previewImage.naturalWidth === 0) throw new Error("Image not fully loaded.");
+          if (els.previewImage.naturalWidth === 0 && !useOpenCV) throw new Error("Image not fully loaded.");
 
           updateStatus('Analyzing structure...', 2);
           const activeWorker = await getWorker(lang);
@@ -971,23 +1062,40 @@
           let text = data.text.trim();
           let confidence = data.confidence;
 
-          // Smart Scoring / Intelligent Fallback Evaluation
+          // Advanced OCR Output Filtering & Intelligent Fallback
           let isTamilMode = lang.includes('tam');
           let density = isTamilMode ? getTamilCharacterDensity(text) : 1;
           let needsFallback = false;
+          let isGarbage = false;
 
-          // Evaluate if the enhanced preprocessing actually damaged the extraction 
-          // (happens when images have heavy noise getting exaggerated by CLAHE).
+          // Detect Garbage Symbols (High ratio of non-alphanumeric chars)
+          const alphanumericMatch = text.match(/[a-zA-Z0-9\u0B80-\u0BFF]/g);
+          const alphanumericRatio = alphanumericMatch ? (alphanumericMatch.length / text.length) : 0;
+          if (text.length > 10 && alphanumericRatio < 0.4) isGarbage = true;
+
+          // Detect Repeated Characters / Corrupted outputs
+          if (/(.)\1{6,}/.test(text)) isGarbage = true;
+          
+          // Detect Invalid Unicode mappings
+          if (/\uFFFD/.test(text)) isGarbage = true;
+
           if (useOpenCV) {
             if (text.length < 20) needsFallback = true;
             else if (confidence < 50) needsFallback = true;
             else if (isTamilMode && density < 0.25 && text.length > 10) needsFallback = true;
+            else if (isGarbage) needsFallback = true;
           }
 
           if (needsFallback) {
             updateStatus('Fixing low confidence score...', 50);
-            // Run on standard un-modified image scale/contrast to see if it performs better
-            const fallback = await activeWorker.recognize(els.previewImage);
+            // Run fallback strictly on the ORIGINAL unmodified image
+            const tempImg = new Image();
+            tempImg.src = originalImageSrc;
+            
+            // Wait for image load synchronously for the canvas to be ready
+            await new Promise(resolve => tempImg.onload = resolve);
+
+            const fallback = await activeWorker.recognize(tempImg);
             const fallbackDensity = isTamilMode ? getTamilCharacterDensity(fallback.data.text) : 1;
 
             if (fallback.data.text.length > text.length * 1.2 || fallbackDensity > density) {
